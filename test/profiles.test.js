@@ -83,6 +83,17 @@ test('validateNameInput enforces missing and invalid types', () => {
   });
 });
 
+test('root route returns a friendly status payload', async (t) => {
+  const ctx = createTestContext();
+
+  t.after(() => ctx.cleanup());
+
+  const response = await ctx.request.get('/').expect(200);
+
+  assert.equal(response.body.status, 'success');
+  assert.equal(response.body.message, 'Stage One API is running');
+});
+
 test('createProfile returns 422 for non-object payloads', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-one-'));
   const dbPath = path.join(dir, 'profiles.db');

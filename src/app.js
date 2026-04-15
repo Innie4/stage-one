@@ -37,6 +37,13 @@ function createApp(options = {}) {
   app.use(createCorsMiddleware());
   app.use(express.json({ strict: false }));
 
+  app.get('/', (req, res) => {
+    res.json({
+      status: 'success',
+      message: 'Stage One API is running',
+    });
+  });
+
   app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
   });
