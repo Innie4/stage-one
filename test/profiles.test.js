@@ -83,6 +83,33 @@ test('validateNameInput enforces missing and invalid types', () => {
   });
 });
 
+test('createProfile returns 422 for non-object payloads', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-one-'));
+  const dbPath = path.join(dir, 'profiles.db');
+  const db = openDatabase(dbPath);
+  const repo = createProfileRepository(db);
+  const service = createProfileService(repo, {
+    fetchImpl: async () => {
+      throw new Error('fetch should not be called');
+    },
+    now: () => new Date('2026-04-01T12:00:00.000Z'),
+  });
+
+  t.after(() => {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  const response = await service.createProfile(123);
+
+  assert.equal(response.statusCode, 422);
+  assert.deepEqual(response.body, {
+    status: 'error',
+    message: 'Invalid type',
+  });
+  assert.equal(repo.list().length, 0);
+});
+
 test('creates a profile, returns the stored payload, and preserves CORS headers', async (t) => {
   const ctx = createTestContext({
     'genderize.io': { body: { gender: 'female', probability: 0.99, count: 1234 } },
@@ -191,6 +218,31 @@ test('filters profiles case-insensitively', async (t) => {
 
   assert.equal(response.body.count, 1);
   assert.deepEqual(response.body.data.map((item) => item.name), ['sarah']);
+});
+
+test('ignores empty filter values and uses the first non-empty repeated value', async (t) => {
+  const ctx = createTestContext({
+    'genderize.io': { body: { gender: 'female', probability: 0.95, count: 50 } },
+    'agify.io': { body: { age: 28 } },
+    'nationalize.io': { body: { country: [{ country_id: 'US', probability: 0.6 }] } },
+  });
+
+  t.after(() => ctx.cleanup());
+
+  await ctx.request.post('/api/profiles').send({ name: 'sarah' }).expect(201);
+
+  const emptyFilterResponse = await ctx.request
+    .get('/api/profiles?gender=%20%20%20&country_id=&age_group=')
+    .expect(200);
+
+  assert.equal(emptyFilterResponse.body.count, 1);
+
+  const repeatedFilterResponse = await ctx.request
+    .get('/api/profiles?gender=&gender=FEMALE&country_id=&country_id=us&age_group=adult')
+    .expect(200);
+
+  assert.equal(repeatedFilterResponse.body.count, 1);
+  assert.equal(repeatedFilterResponse.body.data[0].name, 'sarah');
 });
 
 test('returns 502 when an upstream API response is invalid', async (t) => {

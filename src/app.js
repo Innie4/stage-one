@@ -35,7 +35,7 @@ function createApp(options = {}) {
   });
 
   app.use(createCorsMiddleware());
-  app.use(express.json());
+  app.use(express.json({ strict: false }));
 
   app.get('/health', (req, res) => {
     res.json({ status: 'ok' });

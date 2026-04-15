@@ -5,6 +5,10 @@ function normalizeName(name) {
   return name.trim().toLowerCase();
 }
 
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 function validateNameInput(input) {
   if (input === undefined) {
     return {
@@ -38,15 +42,23 @@ function validateNameInput(input) {
 }
 
 function normalizeOptionalFilter(value) {
-  if (value === undefined) {
+  if (value === undefined || value === null) {
     return undefined;
   }
 
   if (Array.isArray(value)) {
-    return value[0] === undefined ? undefined : String(value[0]).trim();
+    for (const item of value) {
+      const normalized = normalizeOptionalFilter(item);
+      if (normalized !== undefined) {
+        return normalized;
+      }
+    }
+
+    return undefined;
   }
 
-  return String(value).trim();
+  const normalized = String(value).trim();
+  return normalized ? normalized : undefined;
 }
 
 function createProfileService(repo, options = {}) {
@@ -54,6 +66,17 @@ function createProfileService(repo, options = {}) {
   const now = options.now ?? (() => new Date());
 
   async function createProfile(payload) {
+    if (payload !== undefined && payload !== null && !isPlainObject(payload)) {
+      return {
+        ok: false,
+        statusCode: 422,
+        body: {
+          status: 'error',
+          message: 'Invalid type',
+        },
+      };
+    }
+
     const nameValidation = validateNameInput(payload?.name);
     if (!nameValidation.ok) {
       return {
@@ -236,6 +259,7 @@ function createProfileService(repo, options = {}) {
 
 module.exports = {
   createProfileService,
+  isPlainObject,
   normalizeName,
   validateNameInput,
 };
