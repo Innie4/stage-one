@@ -68,7 +68,7 @@ Success:
     "age_group": "adult",
     "country_id": "DRC",
     "country_probability": 0.85,
-    "created_at": "2026-04-01T12:00:00.000Z"
+    "created_at": "2026-04-01T12:00:00Z"
   }
 }
 ```
@@ -89,7 +89,7 @@ Duplicate name:
     "age_group": "adult",
     "country_id": "DRC",
     "country_probability": 0.85,
-    "created_at": "2026-04-01T12:00:00.000Z"
+    "created_at": "2026-04-01T12:00:00Z"
   }
 }
 ```

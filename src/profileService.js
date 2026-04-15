@@ -61,6 +61,10 @@ function normalizeOptionalFilter(value) {
   return normalized ? normalized : undefined;
 }
 
+function formatUtcTimestamp(date) {
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
 function createProfileService(repo, options = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? (() => new Date());
@@ -122,7 +126,7 @@ function createProfileService(repo, options = {}) {
       throw error;
     }
 
-    const createdAt = now().toISOString();
+    const createdAt = formatUtcTimestamp(now());
     const record = {
       id: uuidv7(),
       name,
@@ -260,6 +264,7 @@ function createProfileService(repo, options = {}) {
 module.exports = {
   createProfileService,
   isPlainObject,
+  formatUtcTimestamp,
   normalizeName,
   validateNameInput,
 };

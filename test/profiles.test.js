@@ -145,7 +145,7 @@ test('creates a profile, returns the stored payload, and preserves CORS headers'
   assert.equal(createResponse.body.data.age_group, 'adult');
   assert.equal(createResponse.body.data.country_id, 'DRC');
   assert.equal(createResponse.body.data.country_probability, 0.85);
-  assert.equal(createResponse.body.data.created_at, '2026-04-01T12:00:00.000Z');
+  assert.equal(createResponse.body.data.created_at, '2026-04-01T12:00:00Z');
   assert.match(createResponse.body.data.id, /^[0-9a-f-]{36}$/i);
   assert.equal(createResponse.body.data.id[14], '7');
 
