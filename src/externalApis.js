@@ -47,58 +47,6 @@ async function fetchJson(fetchImpl, url, apiName, timeoutMs) {
   }
 }
 
-function normalizeGenderResponse(payload, apiName) {
-  const gender = typeof payload.gender === 'string' ? payload.gender.toLowerCase() : null;
-  const probability = Number(payload.probability);
-  const count = Number(payload.count);
-
-  if (!gender || count <= 0 || !Number.isFinite(probability)) {
-    throw createInvalidResponseError(apiName);
-  }
-
-  return {
-    gender,
-    gender_probability: probability,
-    sample_size: count,
-  };
-}
-
-function normalizeAgeResponse(payload, apiName) {
-  const age = Number(payload.age);
-
-  if (!Number.isFinite(age)) {
-    throw createInvalidResponseError(apiName);
-  }
-
-  return {
-    age: Math.trunc(age),
-    age_group: classifyAgeGroup(age),
-  };
-}
-
-function normalizeNationalityResponse(payload, apiName) {
-  if (!Array.isArray(payload.country) || payload.country.length === 0) {
-    throw createInvalidResponseError(apiName);
-  }
-
-  const country = payload.country
-    .filter((entry) => entry && typeof entry.country_id === 'string' && Number.isFinite(Number(entry.probability)))
-    .map((entry) => ({
-      country_id: entry.country_id.toUpperCase(),
-      probability: Number(entry.probability),
-    }))
-    .sort((a, b) => b.probability - a.probability)[0];
-
-  if (!country) {
-    throw createInvalidResponseError(apiName);
-  }
-
-  return {
-    country_id: country.country_id,
-    country_probability: country.probability,
-  };
-}
-
 function classifyAgeGroup(age) {
   if (age <= 12) {
     return 'child';
@@ -113,6 +61,58 @@ function classifyAgeGroup(age) {
   }
 
   return 'senior';
+}
+
+function normalizeGenderResponse(payload, apiName) {
+  const gender = typeof payload.gender === 'string' ? payload.gender.toLowerCase() : null;
+  const probability = Number(payload.probability);
+  const count = Number(payload.count);
+
+  if (!gender || count <= 0 || !Number.isFinite(probability) || probability < 0 || probability > 1) {
+    throw createInvalidResponseError(apiName);
+  }
+
+  return {
+    gender,
+    gender_probability: probability,
+  };
+}
+
+function normalizeAgeResponse(payload, apiName) {
+  const age = Number(payload.age);
+
+  if (!Number.isFinite(age) || age < 0) {
+    throw createInvalidResponseError(apiName);
+  }
+
+  return {
+    age: Math.trunc(age),
+    age_group: classifyAgeGroup(age),
+  };
+}
+
+function normalizeNationalityResponse(payload, apiName) {
+  if (!Array.isArray(payload.country) || payload.country.length === 0) {
+    throw createInvalidResponseError(apiName);
+  }
+
+  const countries = payload.country
+    .filter((entry) => entry && typeof entry.country_id === 'string')
+    .map((entry) => ({
+      country_id: entry.country_id.toUpperCase(),
+      probability: Number(entry.probability),
+    }))
+    .filter((entry) => entry.country_id && Number.isFinite(entry.probability) && entry.probability >= 0 && entry.probability <= 1)
+    .sort((a, b) => b.probability - a.probability);
+
+  if (countries.length === 0) {
+    throw createInvalidResponseError(apiName);
+  }
+
+  return {
+    country_id: countries[0].country_id,
+    country_probability: countries[0].probability,
+  };
 }
 
 async function fetchProfileInsights(name, options = {}) {

@@ -1,5 +1,8 @@
 const { v7: uuidv7 } = require('uuid');
+const { createCountryIndex, resolveCountryName } = require('./countryUtils');
 const { ExternalApiError, fetchProfileInsights } = require('./externalApis');
+const { formatUtcTimestamp } = require('./seed');
+const { parseListQuery, parseSearchQuery } = require('./queryEngine');
 
 function normalizeName(name) {
   return name.trim().toLowerCase();
@@ -41,60 +44,33 @@ function validateNameInput(input) {
   };
 }
 
-function normalizeOptionalFilter(value) {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const normalized = normalizeOptionalFilter(item);
-      if (normalized !== undefined) {
-        return normalized;
-      }
-    }
-
-    return undefined;
-  }
-
-  const normalized = String(value).trim();
-  return normalized ? normalized : undefined;
-}
-
-function formatUtcTimestamp(date) {
-  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+function errorResponse(statusCode, message) {
+  return {
+    ok: false,
+    statusCode,
+    body: {
+      status: 'error',
+      message,
+    },
+  };
 }
 
 function createProfileService(repo, options = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? (() => new Date());
+  const countryIndex = options.countryIndex ?? createCountryIndex([]);
 
   async function createProfile(payload) {
     if (payload !== undefined && payload !== null && !isPlainObject(payload)) {
-      return {
-        ok: false,
-        statusCode: 422,
-        body: {
-          status: 'error',
-          message: 'Invalid type',
-        },
-      };
+      return errorResponse(422, 'Invalid type');
     }
 
     const nameValidation = validateNameInput(payload?.name);
     if (!nameValidation.ok) {
-      return {
-        ok: false,
-        statusCode: nameValidation.statusCode,
-        body: {
-          status: 'error',
-          message: nameValidation.message,
-        },
-      };
+      return errorResponse(nameValidation.statusCode, nameValidation.message);
     }
 
     const name = nameValidation.value;
-
     const existing = repo.getByName(name);
     if (existing) {
       return {
@@ -113,36 +89,27 @@ function createProfileService(repo, options = {}) {
       insights = await fetchProfileInsights(name, { fetchImpl });
     } catch (error) {
       if (error instanceof ExternalApiError) {
-        return {
-          ok: false,
-          statusCode: 502,
-          body: {
-            status: 'error',
-            message: error.message,
-          },
-        };
+        return errorResponse(502, error.message);
       }
 
       throw error;
     }
 
-    const createdAt = formatUtcTimestamp(now());
     const record = {
       id: uuidv7(),
       name,
       gender: insights.gender,
       gender_probability: insights.gender_probability,
-      sample_size: insights.sample_size,
       age: insights.age,
       age_group: insights.age_group,
       country_id: insights.country_id,
+      country_name: resolveCountryName(insights.country_id, countryIndex),
       country_probability: insights.country_probability,
-      created_at: createdAt,
+      created_at: formatUtcTimestamp(now()),
     };
 
     try {
       const inserted = repo.create(record);
-
       return {
         ok: true,
         statusCode: 201,
@@ -173,14 +140,7 @@ function createProfileService(repo, options = {}) {
     const profile = repo.getById(id);
 
     if (!profile) {
-      return {
-        ok: false,
-        statusCode: 404,
-        body: {
-          status: 'error',
-          message: 'Profile not found',
-        },
-      };
+      return errorResponse(404, 'Profile not found');
     }
 
     return {
@@ -194,40 +154,55 @@ function createProfileService(repo, options = {}) {
   }
 
   function listProfiles(query = {}) {
-    const filters = {};
-
-    const gender = normalizeOptionalFilter(query.gender);
-    const countryId = normalizeOptionalFilter(query.country_id);
-    const ageGroup = normalizeOptionalFilter(query.age_group);
-
-    if (gender) {
-      filters.gender = gender;
+    const parsed = parseListQuery(query);
+    if (!parsed.ok) {
+      return parsed;
     }
 
-    if (countryId) {
-      filters.country_id = countryId;
-    }
-
-    if (ageGroup) {
-      filters.age_group = ageGroup;
-    }
-
-    const profiles = repo.list(filters).map((profile) => ({
-      id: profile.id,
-      name: profile.name,
-      gender: profile.gender,
-      age: profile.age,
-      age_group: profile.age_group,
-      country_id: profile.country_id,
-    }));
+    const result = repo.findMany({
+      filters: parsed.value.filters,
+      sortBy: parsed.value.sortBy,
+      order: parsed.value.order,
+      limit: parsed.value.limit,
+      offset: (parsed.value.page - 1) * parsed.value.limit,
+    });
 
     return {
       ok: true,
       statusCode: 200,
       body: {
         status: 'success',
-        count: profiles.length,
-        data: profiles,
+        page: parsed.value.page,
+        limit: parsed.value.limit,
+        total: result.total,
+        data: result.data,
+      },
+    };
+  }
+
+  function searchProfiles(query = {}) {
+    const parsed = parseSearchQuery(query, countryIndex);
+    if (!parsed.ok) {
+      return parsed;
+    }
+
+    const result = repo.findMany({
+      filters: parsed.value.filters,
+      sortBy: parsed.value.sortBy,
+      order: parsed.value.order,
+      limit: parsed.value.limit,
+      offset: (parsed.value.page - 1) * parsed.value.limit,
+    });
+
+    return {
+      ok: true,
+      statusCode: 200,
+      body: {
+        status: 'success',
+        page: parsed.value.page,
+        limit: parsed.value.limit,
+        total: result.total,
+        data: result.data,
       },
     };
   }
@@ -236,14 +211,7 @@ function createProfileService(repo, options = {}) {
     const result = repo.deleteById(id);
 
     if (result.changes === 0) {
-      return {
-        ok: false,
-        statusCode: 404,
-        body: {
-          status: 'error',
-          message: 'Profile not found',
-        },
-      };
+      return errorResponse(404, 'Profile not found');
     }
 
     return {
@@ -255,16 +223,17 @@ function createProfileService(repo, options = {}) {
 
   return {
     createProfile,
+    deleteProfile,
     getProfileById,
     listProfiles,
-    deleteProfile,
+    searchProfiles,
   };
 }
 
 module.exports = {
   createProfileService,
+  errorResponse,
   isPlainObject,
-  formatUtcTimestamp,
   normalizeName,
   validateNameInput,
 };

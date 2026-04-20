@@ -10,7 +10,7 @@ function ensureDirectoryForFile(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
-function openDatabase(dbPath = path.join(process.cwd(), 'data', 'profiles.db')) {
+function openDatabase(dbPath = path.join(process.cwd(), 'data', 'intelligence.db')) {
   ensureDirectoryForFile(dbPath);
 
   const db = new DatabaseSync(dbPath);
@@ -23,17 +23,21 @@ function openDatabase(dbPath = path.join(process.cwd(), 'data', 'profiles.db')) 
       name TEXT NOT NULL UNIQUE COLLATE NOCASE,
       gender TEXT NOT NULL,
       gender_probability REAL NOT NULL,
-      sample_size INTEGER NOT NULL,
       age INTEGER NOT NULL,
       age_group TEXT NOT NULL,
       country_id TEXT NOT NULL,
+      country_name TEXT NOT NULL,
       country_probability REAL NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_profiles_gender ON profiles(gender);
-    CREATE INDEX IF NOT EXISTS idx_profiles_country_id ON profiles(country_id);
     CREATE INDEX IF NOT EXISTS idx_profiles_age_group ON profiles(age_group);
+    CREATE INDEX IF NOT EXISTS idx_profiles_country_id ON profiles(country_id);
+    CREATE INDEX IF NOT EXISTS idx_profiles_age ON profiles(age);
+    CREATE INDEX IF NOT EXISTS idx_profiles_created_at ON profiles(created_at);
+    CREATE INDEX IF NOT EXISTS idx_profiles_gender_probability ON profiles(gender_probability);
+    CREATE INDEX IF NOT EXISTS idx_profiles_country_probability ON profiles(country_probability);
   `);
 
   return db;

@@ -5,6 +5,7 @@
   "description": "Backend Wizards Stage 1 - profile persistence and API design assessment",
   "main": "src/index.js",
   "scripts": {
+    "seed": "node -e \"const { openDatabase } = require('./src/db'); const { seedDatabase } = require('./src/seed'); const { loadSeedData } = require('./src/seedData'); const db = openDatabase(); const seedData = loadSeedData(); seedDatabase(db, { profiles: seedData.profiles }); db.close(); console.log('Seed complete');\"",
     "start": "node src/index.js",
     "test": "node --test"
   },

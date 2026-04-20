@@ -2,6 +2,7 @@ const express = require('express');
 const { createProfileRepository } = require('./profileRepository');
 const { createProfileService } = require('./profileService');
 const { openDatabase } = require('./db');
+const { loadSeedData } = require('./seedData');
 
 function createCorsMiddleware() {
   return (req, res, next) => {
@@ -29,10 +30,14 @@ function createApp(options = {}) {
   const app = express();
   const db = options.db ?? openDatabase(options.dbPath);
   const repo = options.repo ?? createProfileRepository(db);
-  const service = options.service ?? createProfileService(repo, {
-    fetchImpl: options.fetchImpl,
-    now: options.now,
-  });
+  const seedData = options.seedData ?? loadSeedData();
+  const service =
+    options.service ??
+    createProfileService(repo, {
+      fetchImpl: options.fetchImpl,
+      now: options.now,
+      countryIndex: options.countryIndex ?? seedData.countryIndex,
+    });
 
   app.use(createCorsMiddleware());
   app.use(express.json({ strict: false }));
@@ -40,7 +45,7 @@ function createApp(options = {}) {
   app.get('/', (req, res) => {
     res.json({
       status: 'success',
-      message: 'Stage One API is running',
+      message: 'Stage Two API is running',
     });
   });
 
@@ -51,6 +56,15 @@ function createApp(options = {}) {
   app.post('/api/profiles', async (req, res, next) => {
     try {
       const result = await service.createProfile(req.body);
+      return sendJson(res, result.statusCode, result.body);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/profiles/search', (req, res, next) => {
+    try {
+      const result = service.searchProfiles(req.query);
       return sendJson(res, result.statusCode, result.body);
     } catch (error) {
       next(error);
